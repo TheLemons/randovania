@@ -250,11 +250,12 @@ class WorldReader:
                 destination_area_asset_id = data["destination_area_asset_id"]
 
                 return TeleporterNode(name, heal, location, self.generic_index, instance_id,
-                                      AreaLocation(destination_world_asset_id, destination_area_asset_id),
-                                      data["scan_asset_id"],
-                                      data["keep_name_when_vanilla"],
-                                      data["editable"],
-                                      )
+                                  AreaLocation(destination_world_asset_id, destination_area_asset_id),
+                                  data["scan_asset_id"],
+                                  data["keep_name_when_vanilla"],
+                                  data["editable"],
+                                  data["requires_visit_to_world"],
+                                  )
 
             elif node_type == "event":
                 return EventNode(name, heal, location, self.generic_index,

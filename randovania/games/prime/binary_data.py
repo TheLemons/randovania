@@ -262,6 +262,7 @@ ConstructNode = Struct(
                 scan_asset_id=OptionalValue(VarInt),
                 keep_name_when_vanilla=Flag,
                 editable=Flag,
+                requires_visit_to_world=Flag,
             ),
             "event": Struct(
                 event_index=VarInt,

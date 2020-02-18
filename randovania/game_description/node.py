@@ -82,6 +82,7 @@ class TeleporterNode(Node):
     scan_asset_id: Optional[int]
     keep_name_when_vanilla: bool
     editable: bool
+    requires_visit_to_world: bool
 
     def __post_init__(self):
         if self.editable and self.teleporter_instance_id is None:

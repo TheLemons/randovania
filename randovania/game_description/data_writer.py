@@ -273,6 +273,7 @@ def write_node(node: Node) -> dict:
         data["scan_asset_id"] = node.scan_asset_id
         data["keep_name_when_vanilla"] = node.keep_name_when_vanilla
         data["editable"] = node.editable
+        data["requires_visit_to_world"] = node.requires_visit_to_world
 
     elif isinstance(node, EventNode):
         data["node_type"] = "event"

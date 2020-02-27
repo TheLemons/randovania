@@ -172,7 +172,11 @@ class WorldList:
 
         if isinstance(node, TeleporterNode):
             try:
-                yield self.resolve_teleporter_node(node, patches), Requirement.trivial()
+                if node.requires_visit_to_world:
+                    requirements = Requirement.trivial()
+                else:
+                    requirements = Requirement.trivial()
+                yield self.resolve_teleporter_node(node, patches), requirements
             except IndexError:
                 # TODO: fix data to not have teleporters pointing to areas with invalid default_node_index
                 print("Teleporter is broken!", node)

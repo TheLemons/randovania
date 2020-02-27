@@ -14,7 +14,6 @@ from randovania.game_description.world_list import WorldList
 from randovania.resolver import bootstrap
 from randovania.resolver.logic import Logic
 from randovania.resolver.resolver_reach import ResolverReach
-from randovania.resolver.state import State
 
 
 def test_possible_actions_empty():

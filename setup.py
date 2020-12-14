@@ -68,14 +68,15 @@ setup(
         "pyqt-distutils",
     ],
     install_requires=[
-        'networkx',
+        'aiofiles',
+        'aiohttp[speedups]',
         'bitstruct',
         'construct<2.10',
-        'tenacity',
+        'Cython>=0.29',
+        'networkx',
         'python-slugify',
         'python-socketio[asyncio_client]',
-        'aiohttp[speedups]',
-        'aiofiles',
+        'tenacity',
     ],
     extras_require={
         "gui": [

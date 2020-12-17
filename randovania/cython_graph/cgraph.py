@@ -3,7 +3,7 @@ from typing import List, Tuple, Dict, Set
 
 from randovania.game_description.game_patches import GamePatches
 from randovania.game_description.node import Node
-from randovania.game_description.requirements import ResourceRequirement
+from randovania.game_description.requirements import ResourceRequirement, RequirementAnd
 from randovania.game_description.resources.resource_type import ResourceType
 from randovania.game_description.world_list import WorldList
 
@@ -23,7 +23,7 @@ class NodeConnection:
         self.damage = damage
 
 
-class CGraph:
+class OptimizedWorldList:
     all_nodes: Tuple[Node, ...]
     requirements: List[ResourceRequirement]
     requirements_index: Dict[ResourceRequirement, int]
@@ -36,7 +36,7 @@ class CGraph:
         self.adjacency = adjacency
 
 
-def cgraph_from(world_list: WorldList, patches: GamePatches) -> CGraph:
+def optimize_world(world_list: WorldList, patches: GamePatches) -> OptimizedWorldList:
     all_nodes = world_list.all_nodes
 
     resource_reqs = collections.defaultdict(int)
@@ -45,8 +45,10 @@ def cgraph_from(world_list: WorldList, patches: GamePatches) -> CGraph:
 
     for node in all_nodes:
         adjacency.append([])
+        extra = [node.requirement_to_leave(patches, {})]
+
         for target, requirement in world_list.potential_nodes_from(node, patches):
-            req_set = requirement.as_set
+            req_set = RequirementAnd([requirement, *extra]).as_set
             connections[(node, target)] = req_set
             for resource_req in req_set.all_individual:
                 if is_dmg(resource_req):
@@ -65,4 +67,4 @@ def cgraph_from(world_list: WorldList, patches: GamePatches) -> CGraph:
                 {resource_req for resource_req in alternative.items if is_dmg(resource_req)},
             ))
 
-    return CGraph(all_nodes, requirements, requirements_index, adjacency)
+    return OptimizedWorldList(all_nodes, requirements, requirements_index, adjacency)

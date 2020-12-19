@@ -63,7 +63,8 @@ def optimize_world(world_list: WorldList, patches: GamePatches) -> OptimizedWorl
         for alternative in requirement.alternatives:
             source_list.append(NodeConnection(
                 all_nodes.index(target),
-                {requirements_index[resource_req] for resource_req in alternative.items if not is_dmg(resource_req)},
+                {requirements_index[resource_req] for resource_req in alternative.items
+                 if resource_req in requirements_index},
                 {resource_req for resource_req in alternative.items if is_dmg(resource_req)},
             ))
 

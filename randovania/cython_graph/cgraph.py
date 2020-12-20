@@ -1,9 +1,12 @@
 import collections
 from typing import List, Tuple, Dict, Set
 
+import typing
+
 from randovania.game_description.game_patches import GamePatches
-from randovania.game_description.node import Node
+from randovania.game_description.node import Node, ResourceNode
 from randovania.game_description.requirements import ResourceRequirement, RequirementAnd
+from randovania.game_description.resources.resource_info import ResourceInfo
 from randovania.game_description.resources.resource_type import ResourceType
 from randovania.game_description.world_list import WorldList
 
@@ -36,7 +39,8 @@ class OptimizedWorldList:
         self.adjacency = adjacency
 
 
-def optimize_world(world_list: WorldList, patches: GamePatches) -> OptimizedWorldList:
+def optimize_world(world_list: WorldList, patches: GamePatches,
+                   dangerous_resources: typing.FrozenSet[ResourceInfo]) -> OptimizedWorldList:
     all_nodes = world_list.all_nodes
 
     resource_reqs = collections.defaultdict(int)
@@ -46,6 +50,10 @@ def optimize_world(world_list: WorldList, patches: GamePatches) -> OptimizedWorl
     for node in all_nodes:
         adjacency.append([])
         extra = [node.requirement_to_leave(patches, {})]
+        if node.is_resource_node:
+            node_resource = typing.cast(ResourceNode, node).resource()
+            if node_resource in dangerous_resources:
+                extra.append(ResourceRequirement(node_resource, 1, False))
 
         for target, requirement in world_list.potential_nodes_from(node, patches):
             req_set = RequirementAnd([requirement, *extra]).as_set

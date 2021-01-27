@@ -11,7 +11,6 @@ from randovania.games.prime import prime_items
 from randovania.games.prime.echoes_items import DARK_TEMPLE_KEY_MODEL, DARK_TEMPLE_KEY_NAMES, DARK_TEMPLE_KEY_ITEMS, \
     SKY_TEMPLE_KEY_MODEL, SKY_TEMPLE_KEY_ITEMS, USELESS_PICKUP_MODEL, USELESS_PICKUP_ITEM
 from randovania.layout.major_item_state import MajorItemState
-from randovania.resolver.exceptions import InvalidConfiguration
 
 
 def create_major_item(item: MajorItem,
@@ -33,8 +32,7 @@ def create_major_item(item: MajorItem,
     :return:
     """
 
-    def _create_resources(base_resource: Optional[int],
-                          temporary_ammo: bool = False) -> Tuple[ResourceQuantity, ...]:
+    def _create_resources(base_resource: Optional[int]) -> Tuple[ResourceQuantity, ...]:
         resources = []
 
         if base_resource is not None:
@@ -42,8 +40,7 @@ def create_major_item(item: MajorItem,
             quantity = 5 if item.name == "Hazard Shield" else 1
             resources.append((resource_database.get_item(base_resource), quantity))
 
-        for ammo_index, ammo_count in zip(ammo.temporaries if temporary_ammo else item.ammo_index,
-                                          state.included_ammo):
+        for ammo_index, ammo_count in zip(item.ammo_index, state.included_ammo):
             resources.append((resource_database.get_item(ammo_index), ammo_count))
 
         if include_percentage:
@@ -52,38 +49,14 @@ def create_major_item(item: MajorItem,
         return tuple(resources)
 
     if item.progression:
-        if ammo_requires_major_item and ammo.unlocked_by != item.progression[0] and ammo.unlocked_by is not None:
-            if len(item.progression) != 1:
-                raise InvalidConfiguration(
-                    ("Item {item.name} uses ammo {ammo.name} that is locked behind {ammo.unlocked_by},"
-                     "but it also has progression. This is unsupported.").format(
-                        ammo=ammo,
-                        item=item,
-                    )
-                )
-
-            name = resource_database.get_item(item.progression[0]).long_name
-            conditional_resources = (
-                ConditionalResources(
-                    name=name,
-                    item=None,
-                    resources=_create_resources(item.progression[0], True)
-                ),
-                ConditionalResources(
-                    name=name,
-                    item=resource_database.get_item(ammo.unlocked_by),
-                    resources=_create_resources(item.progression[0])
-                )
+        conditional_resources = tuple(
+            ConditionalResources(
+                name=resource_database.get_item(item.progression[i]).long_name,
+                item=resource_database.get_item(item.progression[i - 1]) if i > 0 else None,
+                resources=_create_resources(progression)
             )
-        else:
-            conditional_resources = tuple(
-                ConditionalResources(
-                    name=resource_database.get_item(item.progression[i]).long_name,
-                    item=resource_database.get_item(item.progression[i - 1]) if i > 0 else None,
-                    resources=_create_resources(progression)
-                )
-                for i, progression in enumerate(item.progression)
-            )
+            for i, progression in enumerate(item.progression)
+        )
     else:
         conditional_resources = (
             ConditionalResources(name=item.name, item=None, resources=_create_resources(None)),
@@ -110,6 +83,8 @@ def create_major_item(item: MajorItem,
         probability_offset=item.probability_offset,
         probability_multiplier=item.probability_multiplier,
         convert_resources=convert_resources,
+        respects_lock=ammo_requires_major_item,
+        resource_locks=ammo.create_resource_locks(resource_database) if ammo is not None else {},
     )
 
 
@@ -130,26 +105,16 @@ def create_ammo_expansion(ammo: Ammo,
                  for item, count in zip(ammo.items, ammo_count)]
     resources.append((resource_database.item_percentage, 1))
 
-    if ammo.unlocked_by is not None and requires_major_item:
-        temporary_resources = [(resource_database.get_item(item), count)
-                               for item, count in zip(ammo.temporaries, ammo_count)]
-        temporary_resources.append((resource_database.item_percentage, 1))
-
-        conditional_resources = (
-            ConditionalResources(temporary_resources[0][0].long_name, None, tuple(temporary_resources)),
-            ConditionalResources(ammo.name, resource_database.get_item(ammo.unlocked_by), tuple(resources)),
-        )
-    else:
-        conditional_resources = (
-            ConditionalResources(None, None, tuple(resources)),
-        )
-
     return PickupEntry(
         name=ammo.name,
-        resources=conditional_resources,
+        resources=(
+            ConditionalResources(None, None, tuple(resources)),
+        ),
         model_index=ammo.models[0],  # TODO: use a random model
         item_category=ItemCategory.EXPANSION,
         broad_category=ammo.broad_category,
+        respects_lock=requires_major_item,
+        resource_locks=ammo.create_resource_locks(resource_database),
     )
 
 

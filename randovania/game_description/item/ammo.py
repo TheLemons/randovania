@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Tuple, Optional
 
 from randovania.game_description.item.item_category import ItemCategory
+from randovania.game_description.resources.pickup_entry import ResourceLock
+from randovania.game_description.resources.resource_database import ResourceDatabase
 
 
 @dataclass(frozen=True, order=True)
@@ -53,3 +55,13 @@ class Ammo:
     @property
     def model_index(self):
         return self.models[0]
+
+    def create_resource_locks(self, resource_database: ResourceDatabase):
+        resource_locks = {}
+        if self.unlocked_by is not None:
+            for unlocked, temporary in zip(self.items, self.temporaries):
+                resource_locks[resource_database.get_item(unlocked)] = ResourceLock(
+                    locked_by=resource_database.get_item(self.unlocked_by),
+                    temporary_item=resource_database.get_item(temporary),
+                )
+        return resource_locks

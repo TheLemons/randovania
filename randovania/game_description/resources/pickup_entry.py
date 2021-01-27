@@ -1,10 +1,17 @@
+import dataclasses
 from dataclasses import dataclass
-from typing import Optional, Tuple, Iterator
+from typing import Optional, Tuple, Iterator, Dict
 
 from randovania.game_description.item.item_category import ItemCategory
 from randovania.game_description.resources.item_resource_info import ItemResourceInfo
-from randovania.game_description.resources.resource_info import ResourceGainTuple, ResourceGain, ResourceQuantity
-from randovania.game_description.resources.simple_resource_info import SimpleResourceInfo
+from randovania.game_description.resources.resource_info import ResourceGainTuple, ResourceGain, ResourceQuantity, \
+    CurrentResources
+
+
+@dataclass(frozen=True)
+class ResourceLock:
+    locked_by: "ItemResourceInfo"
+    temporary_item: "ItemResourceInfo"
 
 
 @dataclass(frozen=True)
@@ -34,6 +41,8 @@ class PickupEntry:
     item_category: ItemCategory
     broad_category: ItemCategory
     resources: Tuple[ConditionalResources, ...]
+    resource_locks: Dict[ItemResourceInfo, ResourceLock] = dataclasses.field(default_factory=lambda: {})
+    respects_lock: bool = True
     convert_resources: Tuple[ResourceConversion, ...] = tuple()
     probability_offset: float = 0
     probability_multiplier: float = 1
@@ -78,7 +87,7 @@ class PickupEntry:
     def __lt__(self, other):
         return self.name < other.name
 
-    def conditional_for_resources(self, current_resources) -> ConditionalResources:
+    def conditional_for_resources(self, current_resources: CurrentResources) -> ConditionalResources:
         last_conditional: Optional[ConditionalResources] = None
 
         for conditional in self.resources:
@@ -90,14 +99,20 @@ class PickupEntry:
         assert last_conditional is not None
         return last_conditional
 
-    def conversion_resource_gain(self, current_resources):
+    def conversion_resource_gain(self, current_resources: CurrentResources) -> ResourceGain:
         for conversion in self.convert_resources:
             quantity = current_resources.get(conversion.source, 0)
             yield conversion.source, -quantity
             yield conversion.target, quantity
 
-    def resource_gain(self, current_resources) -> ResourceGain:
-        yield from self.conditional_for_resources(current_resources).resources
+    def resource_gain(self, current_resources: CurrentResources, force_lock: bool = False) -> ResourceGain:
+        for resource, quantity in self.conditional_for_resources(current_resources).resources:
+            lock = self.resource_locks.get(resource)
+            if lock is not None and (force_lock or self.respects_lock):
+                if current_resources.get(lock.locked_by, 0) == 0:
+                    resource = lock.temporary_item
+            yield resource, quantity
+
         yield from self.conversion_resource_gain(current_resources)
 
     def __str__(self):

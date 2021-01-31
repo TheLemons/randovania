@@ -5,7 +5,8 @@ import randovania.generator.item_pool.pickup_creator
 from randovania.game_description.item.ammo import Ammo
 from randovania.game_description.item.item_category import ItemCategory
 from randovania.game_description.item.major_item import MajorItem
-from randovania.game_description.resources.pickup_entry import ConditionalResources, ResourceConversion, PickupEntry
+from randovania.game_description.resources.pickup_entry import ConditionalResources, ResourceConversion, PickupEntry, \
+    ResourceLock
 from randovania.layout.major_item_state import MajorItemState
 
 
@@ -40,20 +41,17 @@ def test_create_pickup_for(percentage: bool, has_convert: bool, echoes_resource_
         included_ammo=(10, 20),
     )
 
-    def _create_resources(item):
-        if percentage:
-            return (
-                (item, 1),
-                (ammo_a, 10),
-                (ammo_b, 20),
-                (echoes_resource_database.item_percentage, 1),
-            )
-        else:
-            return (
-                (item, 1),
-                (ammo_a, 10),
-                (ammo_b, 20),
-            )
+    if percentage:
+        extra_resources = (
+            (ammo_a, 10),
+            (ammo_b, 20),
+            (echoes_resource_database.item_percentage, 1),
+        )
+    else:
+        extra_resources = (
+            (ammo_a, 10),
+            (ammo_b, 20),
+        )
 
     # Run
     result = randovania.generator.item_pool.pickup_creator.create_major_item(major_item, state, percentage,
@@ -64,23 +62,12 @@ def test_create_pickup_for(percentage: bool, has_convert: bool, echoes_resource_
     assert result == PickupEntry(
         name="The Item",
         model_index=1337,
-        resources=(
-            ConditionalResources(
-                name="Dark Visor",
-                item=None,
-                resources=_create_resources(item_a),
-            ),
-            ConditionalResources(
-                name="Morph Ball",
-                item=item_a,
-                resources=_create_resources(item_b),
-            ),
-            ConditionalResources(
-                name="Morph Ball Bomb",
-                item=item_b,
-                resources=_create_resources(item_c),
-            ),
+        progression=(
+            (item_a, 1),
+            (item_b, 1),
+            (item_c, 1),
         ),
+        extra_resources=extra_resources,
         convert_resources=(
             ResourceConversion(source=temporary_a, target=ammo_a),
             ResourceConversion(source=temporary_b, target=ammo_b),
@@ -88,6 +75,7 @@ def test_create_pickup_for(percentage: bool, has_convert: bool, echoes_resource_
         item_category=ItemCategory.MORPH_BALL,
         broad_category=ItemCategory.MORPH_BALL_RELATED,
         probability_offset=5,
+        respects_lock=False,
     )
 
 
@@ -122,15 +110,12 @@ def test_create_missile_launcher(ammo_quantity: int, echoes_item_database, echoe
     # Assert
     assert result == PickupEntry(
         name="Missile Launcher",
-        resources=(
-            ConditionalResources(
-                "Missile Launcher", None,
-                resources=(
-                    (missile_launcher, 1),
-                    (missile, ammo_quantity),
-                    (echoes_resource_database.item_percentage, 1),
-                )
-            ),
+        progression=(
+            (missile_launcher, 1),
+        ),
+        extra_resources=(
+            (missile, ammo_quantity),
+            (echoes_resource_database.item_percentage, 1),
         ),
         convert_resources=(
             ResourceConversion(source=temporary, target=missile),
@@ -138,6 +123,11 @@ def test_create_missile_launcher(ammo_quantity: int, echoes_item_database, echoe
         model_index=24,
         item_category=ItemCategory.MISSILE,
         broad_category=ItemCategory.MISSILE_RELATED,
+        resource_lock=ResourceLock(
+            locked_by=missile_launcher,
+            temporary_item=temporary,
+            item_to_lock=missile,
+        )
     )
 
 
@@ -172,41 +162,25 @@ def test_create_seeker_launcher(ammo_quantity: int,
     )
 
     # Assert
-    locked_conditional = (
-        ConditionalResources(
-            "Seeker Launcher", None,
-            resources=(
-                (seeker_launcher, 1),
-                (temporary, ammo_quantity),
-                (echoes_resource_database.item_percentage, 1),
-            )
-        ),
-        ConditionalResources(
-            "Seeker Launcher", missile_launcher,
-            resources=(
-                (seeker_launcher, 1),
-                (missile, ammo_quantity),
-                (echoes_resource_database.item_percentage, 1),
-            )
-        ),
-    )
-    normal_resources = (
-        ConditionalResources(
-            "Seeker Launcher", None,
-            resources=(
-                (seeker_launcher, 1),
-                (missile, ammo_quantity),
-                (echoes_resource_database.item_percentage, 1),
-            )
-        ),
-    )
 
     assert result == PickupEntry(
         name="Seeker Launcher",
-        resources=locked_conditional if ammo_requires_major_item else normal_resources,
+        progression=(
+            (seeker_launcher, 1),
+        ),
+        extra_resources=(
+            (missile, ammo_quantity),
+            (echoes_resource_database.item_percentage, 1),
+        ),
         model_index=25,
         item_category=ItemCategory.MISSILE,
         broad_category=ItemCategory.MISSILE_RELATED,
+        respects_lock=ammo_requires_major_item,
+        resource_lock=ResourceLock(
+            locked_by=missile_launcher,
+            temporary_item=temporary,
+            item_to_lock=missile,
+        ),
     )
 
 
@@ -215,31 +189,18 @@ def test_create_ammo_expansion(requires_major_item: bool, echoes_resource_databa
     # Setup
     primary_a = echoes_resource_database.get_item(73)
     ammo_a = echoes_resource_database.get_item(40)
-    ammo_b = echoes_resource_database.get_item(42)
     temporary_a = echoes_resource_database.get_item(71)
-    temporary_b = echoes_resource_database.get_item(72)
 
     ammo = Ammo(
         name="The Item",
         maximum=100,
-        items=(40, 42),
+        items=(40,),
         broad_category=ItemCategory.ETM,
         unlocked_by=73,
-        temporaries=(71, 72),
+        temporary=71,
         models=(10, 20),
     )
     ammo_count = [75, 150]
-
-    item_resources = (
-        (ammo_a, ammo_count[0]),
-        (ammo_b, ammo_count[1]),
-        (echoes_resource_database.item_percentage, 1),
-    )
-    temporary_resources = (
-        (temporary_a, ammo_count[0]),
-        (temporary_b, ammo_count[1]),
-        (echoes_resource_database.item_percentage, 1),
-    )
 
     # Run
     result = randovania.generator.item_pool.pickup_creator.create_ammo_expansion(
@@ -249,13 +210,18 @@ def test_create_ammo_expansion(requires_major_item: bool, echoes_resource_databa
     assert result == PickupEntry(
         name="The Item",
         model_index=10,
-        resources=(
-            ConditionalResources("Temporary Missile", None, temporary_resources),
-            ConditionalResources("The Item", primary_a, item_resources),
-        ) if requires_major_item else (
-            ConditionalResources(None, None, item_resources),
+        progression=tuple(),
+        extra_resources=(
+            (ammo_a, ammo_count[0]),
+            (echoes_resource_database.item_percentage, 1),
         ),
         item_category=ItemCategory.EXPANSION,
         broad_category=ItemCategory.ETM,
         probability_offset=0,
+        respects_lock=requires_major_item,
+        resource_lock=ResourceLock(
+            locked_by=primary_a,
+            temporary_item=temporary_a,
+            item_to_lock=ammo_a,
+        ),
     )

@@ -174,20 +174,12 @@ def test_bit_pack_pickup_entry(has_convert: bool, echoes_resource_database):
         model_index=26,
         item_category=ItemCategory.TEMPLE_KEY,
         broad_category=ItemCategory.KEY,
-        resources=(
-            ConditionalResources(
-                "Morph Ball", None,
-                (
-                    (find_resource_info_with_long_name(echoes_resource_database.item, "Morph Ball"), 2),
-                    (find_resource_info_with_long_name(echoes_resource_database.item, "Item Percentage"), 5),
-                ),
-            ),
-            ConditionalResources(
-                "Grapple Beam", find_resource_info_with_long_name(echoes_resource_database.item, "Morph Ball"),
-                (
-                    (find_resource_info_with_long_name(echoes_resource_database.item, "Grapple Beam"), 3),
-                ),
-            )
+        progression=(
+            (find_resource_info_with_long_name(echoes_resource_database.item, "Morph Ball"), 2),
+            (find_resource_info_with_long_name(echoes_resource_database.item, "Grapple Beam"), 3),
+        ),
+        extra_resources=(
+            (find_resource_info_with_long_name(echoes_resource_database.item, "Item Percentage"), 5),
         ),
         convert_resources=convert_resources
     )

@@ -51,9 +51,9 @@ def test_add_pickup_to_state(database, patches):
     resource_a = ItemResourceInfo(1, "A", "A", 10, None)
     resource_b = ItemResourceInfo(2, "B", "B", 10, None)
     p = PickupEntry("B", 2, ItemCategory.SUIT, ItemCategory.LIFE_SUPPORT,
-                    (
-                        ConditionalResources(None, None, ((resource_a, 1),)),
-                        ConditionalResources(None, resource_a, ((resource_b, 1),)),
+                    progression=(
+                        (resource_a, 1),
+                        (resource_b, 1),
                     ))
 
     # Run
@@ -75,11 +75,11 @@ def test_assign_pickup_to_starting_items(patches, database):
     resource_a = ItemResourceInfo(1, "A", "A", 10, None)
     resource_b = ItemResourceInfo(2, "B", "B", 10, None)
     p = PickupEntry("A", 2, ItemCategory.SUIT, ItemCategory.LIFE_SUPPORT,
-                    resources=(
-                        ConditionalResources(None, None, (
-                            (resource_a, 5),
-                            (database.item_percentage, 1),
-                        )),
+                    progression=(
+                        (resource_a, 5),
+                    ),
+                    extra_resources=(
+                        (database.item_percentage, 1),
                     ),
                     convert_resources=(
                         ResourceConversion(resource_b, resource_a),
@@ -99,8 +99,8 @@ def test_state_with_pickup(database, patches):
 
     resource_a = ItemResourceInfo(1, "A", "A", 10, None)
     p = PickupEntry("A", 2, ItemCategory.SUIT, ItemCategory.LIFE_SUPPORT,
-                    (
-                        ConditionalResources(None, None, ((resource_a, 1),)),
+                    progression=(
+                        (resource_a, 1),
                     ))
 
     # Run

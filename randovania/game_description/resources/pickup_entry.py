@@ -1,6 +1,5 @@
-import dataclasses
 from dataclasses import dataclass
-from typing import Optional, Tuple, Iterator, Dict
+from typing import Optional, Tuple, Iterator
 
 from randovania.game_description.item.item_category import ItemCategory
 from randovania.game_description.resources.item_resource_info import ItemResourceInfo
@@ -10,8 +9,15 @@ from randovania.game_description.resources.resource_info import ResourceGainTupl
 
 @dataclass(frozen=True)
 class ResourceLock:
-    locked_by: "ItemResourceInfo"
-    temporary_item: "ItemResourceInfo"
+    locked_by: ItemResourceInfo
+    item_to_lock: ItemResourceInfo
+    temporary_item: ItemResourceInfo
+
+    def convert_gain(self, gain: ResourceGain) -> ResourceGain:
+        for resource, quantity in gain:
+            if self.item_to_lock == resource:
+                resource = self.temporary_item
+            yield resource, quantity
 
 
 @dataclass(frozen=True)
@@ -29,8 +35,8 @@ class ResourceConversion:
     overwrite_target: bool = False
 
 
-MAXIMUM_PICKUP_CONDITIONAL_RESOURCES = 3
-MAXIMUM_PICKUP_RESOURCES = 8
+MAXIMUM_PICKUP_PROGRESSION = 32
+MAXIMUM_PICKUP_RESOURCES = 32
 MAXIMUM_PICKUP_CONVERSION = 2
 
 
@@ -40,38 +46,27 @@ class PickupEntry:
     model_index: int
     item_category: ItemCategory
     broad_category: ItemCategory
-    resources: Tuple[ConditionalResources, ...]
-    resource_locks: Dict[ItemResourceInfo, ResourceLock] = dataclasses.field(default_factory=lambda: {})
+    progression: ResourceGainTuple
+    extra_resources: ResourceGainTuple = tuple()
+    resource_lock: Optional[ResourceLock] = None
     respects_lock: bool = True
     convert_resources: Tuple[ResourceConversion, ...] = tuple()
     probability_offset: float = 0
     probability_multiplier: float = 1
 
     def __post_init__(self):
-        if not isinstance(self.resources, tuple):
-            raise ValueError("resources should be a tuple, got {}".format(self.resources))
+        if not isinstance(self.progression, tuple):
+            raise ValueError("resources should be a tuple, got {}".format(self.progression))
 
-        if len(self.resources) < 1:
-            raise ValueError("resources should have at least 1 value")
+        for i, progression in enumerate(self.progression):
+            if not isinstance(progression, tuple):
+                raise ValueError(f"{i}-th progression should be a tuple, got {progression}")
 
-        if len(self.resources) > MAXIMUM_PICKUP_CONDITIONAL_RESOURCES:
-            raise ValueError(f"resources should have at most {MAXIMUM_PICKUP_CONDITIONAL_RESOURCES} "
-                             f"values, got {len(self.resources)}")
+            if len(progression) != 2:
+                raise ValueError(f"{i}-th progression should have 2 elements, got {len(progression)}")
 
-        for i, conditional in enumerate(self.resources):
-            if not isinstance(conditional, ConditionalResources):
-                raise ValueError(f"Conditional at {i} should be a ConditionalResources")
-
-            if len(conditional.resources) > MAXIMUM_PICKUP_RESOURCES:
-                raise ValueError(f"Conditional at {i} should have at most {MAXIMUM_PICKUP_RESOURCES} "
-                                 f"resources, got {len(conditional.resources)}")
-
-            if i == 0:
-                if conditional.item is not None:
-                    raise ValueError("Conditional at 0 should not have a condition")
-            else:
-                if conditional.item is None:
-                    raise ValueError(f"Conditional at {i} should have a condition")
+            if not isinstance(progression[1], int):
+                raise ValueError(f"{i}-th progression second field should be a int, got {progression[1]}")
 
         if len(self.convert_resources) > MAXIMUM_PICKUP_CONVERSION:
             raise ValueError(f"convert_resources should have at most {MAXIMUM_PICKUP_CONVERSION} value")
@@ -87,10 +82,28 @@ class PickupEntry:
     def __lt__(self, other):
         return self.name < other.name
 
+    @property
+    def conditional_resources(self):
+        previous: Optional[ItemResourceInfo] = None
+        for progression in self.progression:
+            yield ConditionalResources(
+                name=progression[0].long_name,
+                item=previous,
+                resources=(progression,) + self.extra_resources,
+            )
+            previous = progression[0]
+
+        if not self.progression:
+            yield ConditionalResources(
+                name=self.name,
+                item=None,
+                resources=self.extra_resources,
+            )
+
     def conditional_for_resources(self, current_resources: CurrentResources) -> ConditionalResources:
         last_conditional: Optional[ConditionalResources] = None
 
-        for conditional in self.resources:
+        for conditional in self.conditional_resources:
             if conditional.item is None or current_resources.get(conditional.item, 0) > 0:
                 last_conditional = conditional
             else:
@@ -106,13 +119,15 @@ class PickupEntry:
             yield conversion.target, quantity
 
     def resource_gain(self, current_resources: CurrentResources, force_lock: bool = False) -> ResourceGain:
-        for resource, quantity in self.conditional_for_resources(current_resources).resources:
-            lock = self.resource_locks.get(resource)
-            if lock is not None and (force_lock or self.respects_lock):
-                if current_resources.get(lock.locked_by, 0) == 0:
-                    resource = lock.temporary_item
-            yield resource, quantity
+        resources = self.conditional_for_resources(current_resources).resources
 
+        if (force_lock or self.respects_lock) and (self.resource_lock is not None and
+                                                   current_resources.get(self.resource_lock.locked_by, 0) == 0):
+            yield from self.resource_lock.convert_gain(resources)
+        else:
+            yield from resources
+
+        # FIXME: this is not converting the temporary missiles that were just given
         yield from self.conversion_resource_gain(current_resources)
 
     def __str__(self):
@@ -120,8 +135,8 @@ class PickupEntry:
 
     @property
     def all_resources(self) -> Iterator[ResourceQuantity]:
-        for conditional in self.resources:
-            yield from conditional.resources
+        yield from self.progression
+        yield from self.extra_resources
 
     @property
     def is_expansion(self) -> bool:

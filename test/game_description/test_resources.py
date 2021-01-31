@@ -33,7 +33,7 @@ def test_add_resource_gain_to_current_resources_convert():
 
     pickup = PickupEntry(
         name="P1", model_index=1, item_category=ItemCategory.SUIT, broad_category=ItemCategory.LIFE_SUPPORT,
-        resources=(ConditionalResources(None, None, ()),),
+        progression=(),
         convert_resources=(ResourceConversion(resource_a, resource_b),)
     )
     current_resources = {
